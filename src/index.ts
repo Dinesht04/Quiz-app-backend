@@ -67,7 +67,7 @@ type QuizRoom = {
     clients: Set<WebSocket>;
     host: WebSocket;
     questions: Question[]|null;
-    scores: Map<WebSocket, number>|null;
+    scores: Map<WebSocket, {username:string,score:number}>|null;
     answered: Map<WebSocket, Set<string>>|null; // tracks which question IDs user has answered
     state: "waiting" | "in-progress" | "ended";
     clientInfo: Map<WebSocket, { name: string }>;
@@ -126,7 +126,6 @@ wss.on('connection', (ws: WebSocket) => {
         var msgStr:string = message.toString();
         var msg : message = JSON.parse(msgStr);
         
-        var username = msg.payload.username;
         var expires = msg.payload.expires; 
         var roomId = msg.payload.roomId;
 
@@ -141,6 +140,8 @@ wss.on('connection', (ws: WebSocket) => {
           }
 
         if(msg.type === "join"){
+            var username = msg.payload.username;
+
             if (!rooms[roomId]) {
                 rooms[roomId] = {
                     clients: new Set<WebSocket>([ws]),
@@ -170,6 +171,8 @@ wss.on('connection', (ws: WebSocket) => {
 
 
         if(msg.type === "message"){
+            var username = msg.payload.username;
+
             const Messagepayload = {
                 type:"message",
                 payload:{
@@ -272,7 +275,8 @@ wss.on('connection', (ws: WebSocket) => {
         if(msg.type === "answer"){
             const QuestionId = msg.payload.QuestionId
             const Answer = msg.payload.Answer
-        
+            const username = msg.payload.username
+            
             const question = rooms[roomId].questions?.find(q => q.id === QuestionId)
             if (question) {
                 const isCorrect = question.correct === Answer;
@@ -287,11 +291,11 @@ wss.on('connection', (ws: WebSocket) => {
                     ws.send(JSON.stringify(payload))
                     
                     console.log("Correct ans:",Answer)
-                    const currentScore = rooms[roomId].scores?.get(ws)
+                    const currentScore = rooms[roomId].scores?.get(ws)?.score
                     if(!currentScore){
-                        rooms[roomId].scores?.set(ws,1)
+                        rooms[roomId].scores?.set(ws,{username:username,score:1})
                     }else{
-                        rooms[roomId].scores?.set(ws,currentScore+1)
+                        rooms[roomId].scores?.set(ws,{username:username,score:currentScore+1})
                     }
 
                 }else{
@@ -314,15 +318,33 @@ wss.on('connection', (ws: WebSocket) => {
 
         if(msg.type === "finish"){
             console.log("qUIZ FINISHED for user")
-            console.log(rooms[roomId].scores?.entries())
-                    ws.send(JSON.stringify({
-                    type: "score",
-                    payload: rooms[roomId].scores?.entries()
-               }))
+
+            if (rooms[roomId].scores) {
+                const scoreList: { username: string; score: number }[] = [];
               
+
+            rooms[roomId].scores?.forEach((score)=>{
+                scoreList.push({username:score.username,score:score.score})
+            })
+            console.log(scoreList)
+            ws.send(JSON.stringify({
+                type: "score",
+                payload: scoreList
+           }))
+            } else{
+                ws.send(JSON.stringify({
+                    type: "error",
+                    payload: {
+                        message:"No Scores available for this room"
+                    }
+               }))
+            }
+
             
+
         }
 
+       
 
     })
 
