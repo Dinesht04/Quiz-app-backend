@@ -65,7 +65,7 @@ type Question = {
 
 type QuizRoom = {
     clients: Set<WebSocket>;
-    host: WebSocket;
+    host: {Websocket:WebSocket,username:string};
     questions: Question[]|null;
     scores: Map<WebSocket, {username:string,score:number}>|null;
     answered: Map<WebSocket, Set<string>>|null; // tracks which question IDs user has answered
@@ -145,7 +145,7 @@ wss.on('connection', (ws: WebSocket) => {
             if (!rooms[roomId]) {
                 rooms[roomId] = {
                     clients: new Set<WebSocket>([ws]),
-                    host: ws,
+                    host: {username:username,Websocket:ws},
                     questions: null,
                     scores: new Map(),
                     answered: null, // tracks which question IDs user has answered
@@ -153,11 +153,24 @@ wss.on('connection', (ws: WebSocket) => {
                     clientInfo: new Map([[ws, { name: username }]])
                 };
                 console.log(`USer joined but didnt exist, so Created new room: ${roomId}`);
+                ws.send(JSON.stringify({
+                    type:"join",
+                    status:"successful",
+                    host:true
+                }))
             }else{
                 rooms[roomId].clients.add(ws); // Add socket to the room
                 rooms[roomId].clientInfo.set(ws, { name: username });
                 console.log(username," Joined room",roomId)
+                ws.send(JSON.stringify({
+                    type:"join",
+                    status:"successful",
+                    host:false
+                }))
             }
+
+           
+
             const clientList = Array.from(rooms[roomId].clientInfo.values()).map(client => client.name);
                 
     
@@ -197,7 +210,7 @@ wss.on('connection', (ws: WebSocket) => {
         //ROOM STARTING
         if(msg.type === "start"){
             try{
-                if(rooms[roomId].host !== ws){
+                if(rooms[roomId].host.Websocket !== ws){
                     const message = {
                         type:"unauthorised",
                         payload:{
