@@ -23,8 +23,8 @@ function stripMarkdownCodeBlock(text:string) {
     return text.trim();
 }
 
-async function CallGemini(topic:string) {
-    const prompt = `Topic is ${topic}. Generate a multiple-choice quiz about the mentioned topic. The quiz should consist of exactly 5 questions. Each question must have 4 distinct options, with only one correct answer. The output must be a JSON array of objects. Each object should represent a question and have the following keys:
+async function CallGemini(topic:string,difficulty:string|number) {
+    const prompt = `Topic is ${topic}. Difficulty is ${difficulty}. Difficulty ranges from 1-5. 1 being easiest and 5 being Impossible. Generate a multiple-choice quiz about the mentioned topic. The quiz should consist of exactly 5 questions. Each question must have 4 distinct options, with only one correct answer. The output must be a JSON array of objects. Each object should represent a question and have the following keys:
         - "id": (string) A unique identifier for the question (e.g., "q1", "q2", "q3").
         - "prompt": (string) The text of the question.
         - "options": (array of strings) An array containing exactly 4 possible answers.
@@ -84,6 +84,8 @@ type message = {
         topic:string
         QuestionId?:string,
         Answer?:string
+        time?:string
+        difficulty:string|number
     }
 }
 
@@ -132,7 +134,7 @@ wss.on('connection', (ws: WebSocket) => {
         if (new Date(expires) > new Date()) {
             console.log("BRo is autheticated")
           }
-
+  
         if (new Date(expires) < new Date()) {
             console.log("BRo is not autheticated")
             ws.close(); // or reject auth
@@ -190,7 +192,8 @@ wss.on('connection', (ws: WebSocket) => {
                 type:"message",
                 payload:{
                     message: msg.payload.message,
-                    username: msg.payload.username,
+                    username: username,
+                    time:msg.payload.time
                 }
                 
             }
@@ -220,57 +223,17 @@ wss.on('connection', (ws: WebSocket) => {
 
                     ws.send(JSON.stringify(message))
                 } else {
-                    // const geminiResponse : Question[] = await CallGemini(msg.payload.topic);
-                // console.log(geminiResponse)
-                const dummyResponse = [
-                    {
-                    "id": "q1",
-                    "prompt": "Which HTML tag is used to define an unordered list?",
-                    "options": ["<ul>", "<ol>", "<li>", "<list>"],
-                    "correct": "<ul>"
-                    },
-                    {
-                    "id": "q2",
-                    "prompt": "What does CSS stand for?",
-                    "options": [
-                    "Computer Style Sheets",
-                    "Cascading Style Sheets",
-                    "Creative Styling System",
-                    "Colorful Style Syntax"
-                    ],
-                    "correct": "Cascading Style Sheets"
-                    },
-                    {
-                    "id": "q3",
-                    "prompt": "Which HTTP method is typically used to retrieve data from a server?",
-                    "options": ["GET", "POST", "PUT", "DELETE"],
-                    "correct": "GET"
-                    },
-                    {
-                    "id": "q4",
-                    "prompt": "Which JavaScript function is used to write content to the web page?",
-                    "options": [
-                    "console.log()",
-                    "document.write()",
-                    "window\.alert()",
-                    "print()"
-                    ],
-                    "correct": "document.write()"
-                    },
-                    {
-                    "id": "q5",
-                    "prompt": "What is the default port for HTTP?",
-                    "options": ["80", "443", "21", "3306"],
-                    "correct": "80"
-                    }
-                    ]
+                    const difficulty = msg.payload.difficulty;
+                    const geminiResponse : Question[] = await CallGemini(msg.payload.topic,difficulty);
+                console.log(geminiResponse)
+                
                     
-                rooms[roomId].questions = dummyResponse;
+                rooms[roomId].questions = geminiResponse;
                 rooms[roomId].state = "in-progress"
 
                 const payload = {
                     type:"questions",
-                    payload:dummyResponse
+                    payload:geminiResponse
                 }
 
                 rooms[roomId].clients.forEach((socket)=>{
@@ -291,6 +254,13 @@ wss.on('connection', (ws: WebSocket) => {
             const username = msg.payload.username
             
             const question = rooms[roomId].questions?.find(q => q.id === QuestionId)
+
+            var currentScore = rooms[roomId].scores?.get(ws)?.score; 
+
+            if(!currentScore){
+                rooms[roomId].scores?.set(ws,{username:username,score:0})
+                currentScore = 0;
+            }
             if (question) {
                 const isCorrect = question.correct === Answer;
                 if(isCorrect){
@@ -304,12 +274,7 @@ wss.on('connection', (ws: WebSocket) => {
                     ws.send(JSON.stringify(payload))
                     
                     console.log("Correct ans:",Answer)
-                    const currentScore = rooms[roomId].scores?.get(ws)?.score
-                    if(!currentScore){
-                        rooms[roomId].scores?.set(ws,{username:username,score:1})
-                    }else{
-                        rooms[roomId].scores?.set(ws,{username:username,score:currentScore+1})
-                    }
+                    rooms[roomId].scores?.set(ws,{username:username,score:currentScore+1})
 
                 }else{
                     const payload = {
