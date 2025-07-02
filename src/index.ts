@@ -62,13 +62,15 @@ type Question = {
     correct: string; // this is kept server-side only
 };
 
+type username = string
+type questionsAnswered = number;
 
 type QuizRoom = {
     clients: Set<WebSocket>;
     host: {Websocket:WebSocket,username:string};
     questions: Question[]|null;
     scores: Map<WebSocket, {username:string,score:number}>|null;
-    answered: Map<WebSocket, Set<string>>|null; // tracks which question IDs user has answered
+    answered: Map<username, questionsAnswered>; // tracks which question IDs user has answered
     state: "waiting" | "in-progress" | "ended";
     clientInfo: Map<WebSocket, { name: string }>;
 };
@@ -150,7 +152,7 @@ wss.on('connection', (ws: WebSocket) => {
                     host: {username:username,Websocket:ws},
                     questions: null,
                     scores: new Map(),
-                    answered: null, // tracks which question IDs user has answered
+                    answered: new Map([[username,0]]), // tracks which question IDs user has answered
                     state: "waiting",
                     clientInfo: new Map([[ws, { name: username }]])
                 };
@@ -163,6 +165,8 @@ wss.on('connection', (ws: WebSocket) => {
             }else{
                 rooms[roomId].clients.add(ws); // Add socket to the room
                 rooms[roomId].clientInfo.set(ws, { name: username });
+                rooms[roomId].answered.set(username,0);
+    
                 console.log(username," Joined room",roomId)
                 ws.send(JSON.stringify({
                     type:"join",
@@ -288,6 +292,23 @@ wss.on('connection', (ws: WebSocket) => {
                     console.log("InCorrect ans:",Answer)
                 }
 
+                var questionsAnswered = rooms[roomId].answered.get(username)
+
+                if(!questionsAnswered){
+                    questionsAnswered = 0;
+                }
+
+                rooms[roomId].answered.set(username, questionsAnswered+1)
+
+
+                rooms[roomId].clients.forEach((socket)=>{
+                    socket.send(JSON.stringify({
+                        type:"live-score",
+                        payload:{
+                            liveScore: Array.from(rooms[roomId].answered.entries())
+                        }
+                    }))
+                })
 
               } else {
                 console.error("Question not found.");
@@ -298,17 +319,34 @@ wss.on('connection', (ws: WebSocket) => {
             console.log("qUIZ FINISHED for user")
 
             if (rooms[roomId].scores) {
-                const scoreList: { username: string; score: number }[] = [];
-              
+             var over = true;
+
+           for(const score of rooms[roomId].answered){
+            if(score[1]!== 5){
+                over = false;
+                break;
+            }
+           }
+           
+           if(over){
+            const finalScoreList: { username: string; score: number }[] = [];
 
             rooms[roomId].scores?.forEach((score)=>{
-                scoreList.push({username:score.username,score:score.score})
+                finalScoreList.push({username:score.username,score:score.score})
             })
-            console.log(scoreList)
-            ws.send(JSON.stringify({
-                type: "score",
-                payload: scoreList
-           }))
+
+            rooms[roomId].clients.forEach((socket)=>{
+                socket.send(JSON.stringify({
+                    type:"final-score",
+                    payload:{
+                        finalScores: finalScoreList
+                    }
+                }))
+            })
+
+            rooms[roomId].state = "ended"
+           }
+
             } else{
                 ws.send(JSON.stringify({
                     type: "error",
