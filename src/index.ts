@@ -300,12 +300,13 @@ wss.on('connection', (ws: WebSocket) => {
 
                 rooms[roomId].answered.set(username, questionsAnswered+1)
 
-
+                console.log(Array.from(rooms[roomId].answered.entries()))
+                const liveScore = Array.from(rooms[roomId].answered.entries());
                 rooms[roomId].clients.forEach((socket)=>{
                     socket.send(JSON.stringify({
                         type:"live-score",
                         payload:{
-                            liveScore: Array.from(rooms[roomId].answered.entries())
+                            liveScore: liveScore
                         }
                     }))
                 })
@@ -322,7 +323,7 @@ wss.on('connection', (ws: WebSocket) => {
              var over = true;
 
            for(const score of rooms[roomId].answered){
-            if(score[1]!== 5){
+            if(score[1]< 5){
                 over = false;
                 break;
             }
