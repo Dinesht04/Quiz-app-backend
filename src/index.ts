@@ -291,7 +291,7 @@ wss.on('connection', (ws: WebSocket) => {
                     ws.send(JSON.stringify(payload))
                     console.log("InCorrect ans:",Answer)
                 }
-
+                //live tracking
                 var questionsAnswered = rooms[roomId].answered.get(username)
 
                 if(!questionsAnswered){
@@ -300,7 +300,7 @@ wss.on('connection', (ws: WebSocket) => {
 
                 rooms[roomId].answered.set(username, questionsAnswered+1)
 
-                console.log(Array.from(rooms[roomId].answered.entries()))
+               
                 const liveScore = Array.from(rooms[roomId].answered.entries());
                 rooms[roomId].clients.forEach((socket)=>{
                     socket.send(JSON.stringify({
@@ -322,8 +322,8 @@ wss.on('connection', (ws: WebSocket) => {
             if (rooms[roomId].scores) {
              var over = true;
 
-           for(const score of rooms[roomId].answered){
-            if(score[1]< 5){
+           for(const answered of rooms[roomId].answered){
+            if(answered[1]< 5){
                 over = false;
                 break;
             }
