@@ -6,6 +6,8 @@ dotenv.config();
 
 const PORT = 8080;
 
+console.log(process.env.GEMINI_API_KEY);
+
 const wss = new WebSocketServer({ port: PORT });
 console.log(`WebSocket server started on ws://localhost:${PORT}`);
 
@@ -23,8 +25,8 @@ function stripMarkdownCodeBlock(text: string) {
   return text.trim();
 }
 
-async function CallGemini(topic: string) {
-  const prompt = `Topic is ${topic}. Generate a multiple-choice quiz about the mentioned topic. The quiz should consist of exactly 5 questions. Each question must have 4 distinct options, with only one correct answer. The output must be a JSON array of objects. Each object should represent a question and have the following keys:
+async function CallGemini(topic: string, difficulty: string | number) {
+  const prompt = `Topic is ${topic}. Difficulty is ${difficulty}. Difficulty ranges from 1-5. 1 being easiest and 5 being Impossible. Generate a multiple-choice quiz about the mentioned topic. The quiz should consist of exactly 5 questions. Each question must have 4 distinct options, with only one correct answer. The output must be a JSON array of objects. Each object should represent a question and have the following keys:
         - "id": (string) A unique identifier for the question (e.g., "q1", "q2", "q3").
         - "prompt": (string) The text of the question.
         - "options": (array of strings) An array containing exactly 4 possible answers.
@@ -64,12 +66,15 @@ type Question = {
   correct: string; // this is kept server-side only
 };
 
+type username = string;
+type questionsAnswered = number;
+
 type QuizRoom = {
   clients: Set<WebSocket>;
-  host: WebSocket;
+  host: { Websocket: WebSocket; username: string };
   questions: Question[] | null;
   scores: Map<WebSocket, { username: string; score: number }> | null;
-  answered: Map<WebSocket, Set<string>> | null; // tracks which question IDs user has answered
+  answered: Map<username, questionsAnswered>; // tracks which question IDs user has answered
   state: 'waiting' | 'in-progress' | 'ended';
   clientInfo: Map<WebSocket, { name: string }>;
 };
@@ -84,6 +89,8 @@ type message = {
     topic: string;
     QuestionId?: string;
     Answer?: string;
+    time?: string;
+    difficulty: string | number;
   };
 };
 
@@ -125,11 +132,11 @@ wss.on('connection', (ws: WebSocket) => {
   console.log('Client connected!');
   userCount++;
   ws.on('message', async (message) => {
-    const msgStr: string = message.toString();
-    const msg: message = JSON.parse(msgStr);
+    var msgStr: string = message.toString();
+    var msg: message = JSON.parse(msgStr);
 
-    const expires = msg.payload.expires;
-    const roomId = msg.payload.roomId;
+    var expires = msg.payload.expires;
+    var roomId = msg.payload.roomId;
 
     if (new Date(expires) > new Date()) {
       console.log('BRo is autheticated');
@@ -147,21 +154,38 @@ wss.on('connection', (ws: WebSocket) => {
       if (!rooms[roomId]) {
         rooms[roomId] = {
           clients: new Set<WebSocket>([ws]),
-          host: ws,
+          host: { username: username, Websocket: ws },
           questions: null,
           scores: new Map(),
-          answered: null, // tracks which question IDs user has answered
+          answered: new Map([[username, 0]]), // tracks which question IDs user has answered
           state: 'waiting',
           clientInfo: new Map([[ws, { name: username }]]),
         };
         console.log(
           `USer joined but didnt exist, so Created new room: ${roomId}`,
         );
+        ws.send(
+          JSON.stringify({
+            type: 'join',
+            status: 'successful',
+            host: true,
+          }),
+        );
       } else {
         rooms[roomId].clients.add(ws); // Add socket to the room
         rooms[roomId].clientInfo.set(ws, { name: username });
+        rooms[roomId].answered.set(username, 0);
+
         console.log(username, ' Joined room', roomId);
+        ws.send(
+          JSON.stringify({
+            type: 'join',
+            status: 'successful',
+            host: false,
+          }),
+        );
       }
+
       const clientList = Array.from(rooms[roomId].clientInfo.values()).map(
         (client) => client.name,
       );
@@ -183,7 +207,8 @@ wss.on('connection', (ws: WebSocket) => {
         type: 'message',
         payload: {
           message: msg.payload.message,
-          username: msg.payload.username,
+          username: username,
+          time: msg.payload.time,
         },
       };
       rooms[roomId].clients.forEach((socket) => {
@@ -206,7 +231,7 @@ wss.on('connection', (ws: WebSocket) => {
     //ROOM STARTING
     if (msg.type === 'start') {
       try {
-        if (rooms[roomId].host !== ws) {
+        if (rooms[roomId].host.Websocket !== ws) {
           const message = {
             type: 'unauthorised',
             payload: {
@@ -216,59 +241,19 @@ wss.on('connection', (ws: WebSocket) => {
 
           ws.send(JSON.stringify(message));
         } else {
-          // const geminiResponse : Question[] = await CallGemini(msg.payload.topic);
-          // console.log(geminiResponse)
-          const dummyResponse = [
-            {
-              id: 'q1',
-              prompt: 'Which HTML tag is used to define an unordered list?',
-              options: ['<ul>', '<ol>', '<li>', '<list>'],
-              correct: '<ul>',
-            },
-            {
-              id: 'q2',
-              prompt: 'What does CSS stand for?',
-              options: [
-                'Computer Style Sheets',
-                'Cascading Style Sheets',
-                'Creative Styling System',
-                'Colorful Style Syntax',
-              ],
-              correct: 'Cascading Style Sheets',
-            },
-            {
-              id: 'q3',
-              prompt:
-                'Which HTTP method is typically used to retrieve data from a server?',
-              options: ['GET', 'POST', 'PUT', 'DELETE'],
-              correct: 'GET',
-            },
-            {
-              id: 'q4',
-              prompt:
-                'Which JavaScript function is used to write content to the web page?',
-              options: [
-                'console.log()',
-                'document.write()',
-                'window.alert()',
-                'print()',
-              ],
-              correct: 'document.write()',
-            },
-            {
-              id: 'q5',
-              prompt: 'What is the default port for HTTP?',
-              options: ['80', '443', '21', '3306'],
-              correct: '80',
-            },
-          ];
+          const difficulty = msg.payload.difficulty;
+          const geminiResponse: Question[] = await CallGemini(
+            msg.payload.topic,
+            difficulty,
+          );
+          console.log(geminiResponse);
 
-          rooms[roomId].questions = dummyResponse;
+          rooms[roomId].questions = geminiResponse;
           rooms[roomId].state = 'in-progress';
 
           const payload = {
             type: 'questions',
-            payload: dummyResponse,
+            payload: geminiResponse,
           };
 
           rooms[roomId].clients.forEach((socket) => {
@@ -291,6 +276,13 @@ wss.on('connection', (ws: WebSocket) => {
       const question = rooms[roomId].questions?.find(
         (q) => q.id === QuestionId,
       );
+
+      var currentScore = rooms[roomId].scores?.get(ws)?.score;
+
+      if (!currentScore) {
+        rooms[roomId].scores?.set(ws, { username: username, score: 0 });
+        currentScore = 0;
+      }
       if (question) {
         const isCorrect = question.correct === Answer;
         if (isCorrect) {
@@ -304,15 +296,10 @@ wss.on('connection', (ws: WebSocket) => {
           ws.send(JSON.stringify(payload));
 
           console.log('Correct ans:', Answer);
-          const currentScore = rooms[roomId].scores?.get(ws)?.score;
-          if (!currentScore) {
-            rooms[roomId].scores?.set(ws, { username: username, score: 1 });
-          } else {
-            rooms[roomId].scores?.set(ws, {
-              username: username,
-              score: currentScore + 1,
-            });
-          }
+          rooms[roomId].scores?.set(ws, {
+            username: username,
+            score: currentScore + 1,
+          });
         } else {
           const payload = {
             type: 'answer',
@@ -324,6 +311,27 @@ wss.on('connection', (ws: WebSocket) => {
           ws.send(JSON.stringify(payload));
           console.log('InCorrect ans:', Answer);
         }
+
+        var questionsAnswered = rooms[roomId].answered.get(username);
+
+        if (!questionsAnswered) {
+          questionsAnswered = 0;
+        }
+
+        rooms[roomId].answered.set(username, questionsAnswered + 1);
+
+        console.log(Array.from(rooms[roomId].answered.entries()));
+        const liveScore = Array.from(rooms[roomId].answered.entries());
+        rooms[roomId].clients.forEach((socket) => {
+          socket.send(
+            JSON.stringify({
+              type: 'live-score',
+              payload: {
+                liveScore: liveScore,
+              },
+            }),
+          );
+        });
       } else {
         console.error('Question not found.');
       }
@@ -333,18 +341,38 @@ wss.on('connection', (ws: WebSocket) => {
       console.log('qUIZ FINISHED for user');
 
       if (rooms[roomId].scores) {
-        const scoreList: { username: string; score: number }[] = [];
+        var over = true;
 
-        rooms[roomId].scores?.forEach((score) => {
-          scoreList.push({ username: score.username, score: score.score });
-        });
-        console.log(scoreList);
-        ws.send(
-          JSON.stringify({
-            type: 'score',
-            payload: scoreList,
-          }),
-        );
+        for (const score of rooms[roomId].answered) {
+          if (score[1] < 5) {
+            over = false;
+            break;
+          }
+        }
+
+        if (over) {
+          const finalScoreList: { username: string; score: number }[] = [];
+
+          rooms[roomId].scores?.forEach((score) => {
+            finalScoreList.push({
+              username: score.username,
+              score: score.score,
+            });
+          });
+
+          rooms[roomId].clients.forEach((socket) => {
+            socket.send(
+              JSON.stringify({
+                type: 'final-score',
+                payload: {
+                  finalScores: finalScoreList,
+                },
+              }),
+            );
+          });
+
+          rooms[roomId].state = 'ended';
+        }
       } else {
         ws.send(
           JSON.stringify({
