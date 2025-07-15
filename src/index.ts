@@ -2,126 +2,20 @@ import { WebSocketServer } from "ws"
 import WebSocket from "ws"
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import { message, Question, QuizRoom } from "./types";
+import { CallGemini } from "./gemini";
+import { removeClientFromRooms } from "./RemoveClientFromRoom";
 dotenv.config();
 
-const PORT = 8080;
+const PORT : number = 8080;
 
-console.log(process.env.GEMINI_API_KEY)
+export const rooms : { [roomId:string]:QuizRoom} = {};
 
-const wss = new WebSocketServer({port:PORT})
-console.log(`WebSocket server started on ws://localhost:${PORT}`);
+if(PORT){
+    const wss = new WebSocketServer({port:PORT})
+    console.log(`WebSocket server started on ws://localhost:${PORT}`);
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-// Helper function to remove Markdown code block fencing
-function stripMarkdownCodeBlock(text:string) {
-    if (text.startsWith('```json') && text.endsWith('```')) {
-        // Remove '```json\n' from the beginning and '\n```' from the end
-        return text.substring('```json\n'.length, text.length - '\n```'.length).trim();
-    }
-    // If it's not a markdown code block, return as is (or throw an error if strict)
-    return text.trim();
-}
-
-async function CallGemini(topic:string,difficulty:string|number) {
-    const prompt = `Topic is ${topic}. Difficulty is ${difficulty}. Difficulty ranges from 1-5. 1 being easiest and 5 being Impossible. Generate a multiple-choice quiz about the mentioned topic. The quiz should consist of exactly 5 questions. Each question must have 4 distinct options, with only one correct answer. The output must be a JSON array of objects. Each object should represent a question and have the following keys:
-        - "id": (string) A unique identifier for the question (e.g., "q1", "q2", "q3").
-        - "prompt": (string) The text of the question.
-        - "options": (array of strings) An array containing exactly 4 possible answers.
-        - "correct": (string) The exact text of the correct answer, which must be one of the options.
-        IMPORTANT: Respond with ONLY the JSON array, do NOT wrap it in markdown code blocks or any other text.`;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: prompt,
-    });
-
-    if (!response.text) { 
-        throw new Error("Gemini API error: No text content in response.");
-    }
-
-    // Strip the markdown fencing before parsing
-    const jsonString = stripMarkdownCodeBlock(response.text);
-
-    try {
-        return JSON.parse(jsonString);
-    } catch (e) {
-        console.error("Failed to parse JSON from Gemini response:", e);
-        console.error("Raw response text:", response.text);
-        console.error("Stripped JSON string attempted to parse:", jsonString);
-        throw new Error("Error parsing Gemini response: Invalid JSON format after stripping markdown.");
-    }
-  }
-
-let userCount = 0;
-
-type Question = {
-    id: string;
-    prompt: string;
-    options: string[];
-    correct: string; // this is kept server-side only
-};
-
-type username = string
-type questionsAnswered = number;
-
-type QuizRoom = {
-    clients: Set<WebSocket>;
-    host: {Websocket:WebSocket,username:string};
-    questions: Question[]|null;
-    scores: Map<WebSocket, {username:string,score:number}>|null;
-    answered: Map<username, questionsAnswered>; // tracks which question IDs user has answered
-    state: "waiting" | "in-progress" | "ended";
-    clientInfo: Map<WebSocket, { name: string }>;
-};
-
-
-type message = {
-    type:string
-    payload:{
-        message?:string,
-        roomId:string | number,
-        username:string,
-        expires:Date,
-        topic:string
-        QuestionId?:string,
-        Answer?:string
-        time?:string
-        difficulty:string|number
-    }
-}
-
-const rooms : { [roomId:string]:QuizRoom} = {};
-
-
-
-function removeClientFromRooms(ws: WebSocket) {
-    for (const roomId in rooms) {
-        const room = rooms[roomId];
-        if (room.clients.has(ws)) {
-            room.clients.delete(ws);
-            room.clientInfo.delete(ws);
-            console.log(`Removed client from room ${roomId}`);
-
-            // Optionally notify others
-            const clientList = Array.from(room.clientInfo.values()).map(client => client.name);
-            room.clients.forEach(socket => {
-                socket.send(JSON.stringify({
-                    type: "client-list",
-                    payload: clientList
-                }));
-            });
-
-            // Delete the room if empty
-            if (room.clients.size === 0) {
-                delete rooms[roomId];
-                console.log(`Deleted empty room ${roomId}`);
-            }
-
-            break; // A client can only be in one room
-        }
-    }
-}
+    let userCount = 0; 
 
 wss.on('connection', (ws: WebSocket) => {
     console.log('Client connected!');
@@ -383,4 +277,11 @@ wss.on('error', (error: Error) => {
     console.error(`Server error: ${error.message}`);
 });
 
-console.log('Waiting for connections...');
+console.log('Waiting for connections...');  
+
+
+} else{
+    console.log("Error: PORT Undefined")
+}
+
+
