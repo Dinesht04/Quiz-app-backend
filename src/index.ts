@@ -7,7 +7,8 @@ import { CallGemini } from './gemini';
 import { removeClientFromRooms } from './RemoveClientFromRoom';
 dotenv.config();
 
-const PORT: number = 8080;
+// @ts
+const PORT: number = parseInt(<string>process.env.PORT, 10) || 3000
 
 export const rooms: { [roomId: string]: QuizRoom } = {};
 
@@ -21,11 +22,11 @@ if (PORT) {
     console.log('Client connected!');
     userCount++;
     ws.on('message', async (message) => {
-      var msgStr: string = message.toString();
-      var msg: message = JSON.parse(msgStr);
+      const msgStr: string = message.toString();
+      const msg: message = JSON.parse(msgStr);
 
-      var expires = msg.payload.expires;
-      var roomId = msg.payload.roomId;
+      const expires = msg.payload.expires;
+      const roomId = msg.payload.roomId;
 
       if (new Date(expires) > new Date()) {
         console.log('BRo is autheticated');
@@ -38,7 +39,7 @@ if (PORT) {
       }
 
       if (msg.type === 'join') {
-        var username = msg.payload.username;
+        const username = msg.payload.username;
 
         if (!rooms[roomId]) {
           rooms[roomId] = {
@@ -90,7 +91,7 @@ if (PORT) {
       }
 
       if (msg.type === 'message') {
-        var username = msg.payload.username;
+        const username = msg.payload.username;
 
         const Messagepayload = {
           type: 'message',
@@ -105,7 +106,7 @@ if (PORT) {
             ? socket.send(JSON.stringify(Messagepayload))
             : null;
         });
-      }
+      }   
 
       if (msg.type === 'leave') {
         removeClientFromRooms(ws);
@@ -166,7 +167,7 @@ if (PORT) {
           (q) => q.id === QuestionId,
         );
 
-        var currentScore = rooms[roomId].scores?.get(ws)?.score;
+        let currentScore = rooms[roomId].scores?.get(ws)?.score;
 
         if (!currentScore) {
           rooms[roomId].scores?.set(ws, { username: username, score: 0 });
@@ -201,7 +202,7 @@ if (PORT) {
             console.log('InCorrect ans:', Answer);
           }
 
-          var questionsAnswered = rooms[roomId].answered.get(username);
+          let questionsAnswered = rooms[roomId].answered.get(username);
 
           if (!questionsAnswered) {
             questionsAnswered = 0;
@@ -230,7 +231,7 @@ if (PORT) {
         console.log('qUIZ FINISHED for user');
 
         if (rooms[roomId].scores) {
-          var over = true;
+          let over = true;
 
           for (const score of rooms[roomId].answered) {
             if (score[1] < 5) {
