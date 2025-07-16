@@ -21,11 +21,58 @@ let userCount = 0;
 // @ts
 const PORT: number = parseInt(<string>process.env.PORT, 10) || 3000
 
-app.get('/', function(req:Request, res:Response){
-  console.log('get route');
+app.get('/', function(req: any, res: Response) {
+  console.log('--- Request Details ---');
+
+  // General Request Information
+  console.log(`Received a ${req.method} request for ${req.originalUrl}`);
+  console.log(`Protocol: ${req.protocol}`);
+  console.log(`Hostname: ${req.hostname}`);
+
+  // Client's IP Address
+  // If behind a proxy, ensure 'trust proxy' is set for accurate IP
+  console.log(`Client IP: ${req.ip}`);
+
+  // Request Headers
+  console.log('\n--- Headers ---');
+  console.log(`User-Agent: ${req.headers['user-agent']}`);
+  console.log(`Referer: ${req.headers['referer'] || 'Direct access or Referer header not present'}`);
+
+  // For applications behind a proxy
+  const forwardedFor = req.headers['x-forwarded-for'];
+  if (forwardedFor) {
+    console.log(`X-Forwarded-For: ${forwardedFor}`);
+  }
+
+  console.log('---------------------\n');
 });
 
-app.ws('/', function(ws :WebSocket, req:Request) {
+
+app.ws('/', function(ws :WebSocket, req:any) {
+
+  console.log('--- Request Details ---');
+
+  // General Request Information
+  console.log(`Received a ${req.method} request for ${req.originalUrl}`);
+  console.log(`Protocol: ${req.protocol}`);
+  console.log(`Hostname: ${req.hostname}`);
+
+  // Client's IP Address
+  // If behind a proxy, ensure 'trust proxy' is set for accurate IP
+  console.log(`Client IP: ${req.ip}`);
+
+  // Request Headers
+  console.log('\n--- Headers ---');
+  console.log(`User-Agent: ${req.headers['user-agent']}`);
+  console.log(`Referer: ${req.headers['referer'] || 'Direct access or Referer header not present'}`);
+
+  // For applications behind a proxy
+  const forwardedFor = req.headers['x-forwarded-for'];
+  if (forwardedFor) {
+    console.log(`X-Forwarded-For: ${forwardedFor}`);
+  }
+
+  console.log('---------------------\n');
 
   ws.on('open',(ws: WebSocket)=>{
     console.log('Client connected!');
