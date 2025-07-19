@@ -1,6 +1,4 @@
-import { WebSocketServer } from 'ws';
 import WebSocket from 'ws';
-import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import { message, Question, QuizRoom } from './types';
 import { CallGemini } from './gemini';
@@ -60,6 +58,7 @@ app.ws('/', function(ws :WebSocket, req:any) {
           clients: new Set<WebSocket>([ws]),
           host: { username: username, Websocket: ws },
           questions: null,
+          type:null,
           scores: new Map(),
           answered: new Map([[username, 0]]), // tracks which question IDs user has answered
           state: 'waiting',
@@ -154,6 +153,7 @@ app.ws('/', function(ws :WebSocket, req:any) {
 
           rooms[roomId].questions = geminiResponse;
           rooms[roomId].state = 'in-progress';
+          rooms[roomId].type = msg.payload.roomType;
 
           const payload = {
             type: 'questions',
@@ -173,72 +173,141 @@ app.ws('/', function(ws :WebSocket, req:any) {
     }
     //CHECKING QUIZ ANSWER
     if (msg.type === 'answer') {
-      const QuestionId = msg.payload.QuestionId;
-      const Answer = msg.payload.Answer;
-      const username = msg.payload.username;
 
-      const question = rooms[roomId].questions?.find(
-        (q) => q.id === QuestionId,
-      );
-
-      let currentScore = rooms[roomId].scores?.get(ws)?.score;
-
-      if (!currentScore) {
-        rooms[roomId].scores?.set(ws, { username: username, score: 0 });
-        currentScore = 0;
-      }
-      if (question) {
-        const isCorrect = question.correct === Answer;
-        if (isCorrect) {
-          const payload = {
-            type: 'answer',
-            payload: {
-              QuestionId: QuestionId,
-              Correct: true,
-            },
-          };
-          ws.send(JSON.stringify(payload));
-
-          console.log('Correct ans:', Answer);
-          rooms[roomId].scores?.set(ws, {
-            username: username,
-            score: currentScore + 1,
+      if(rooms[roomId].type === 'Quiz'){
+        const QuestionId = msg.payload.QuestionId;
+        const Answer = msg.payload.Answer;
+        const username = msg.payload.username;
+  
+        const question = rooms[roomId].questions?.find(
+          (q) => q.id === QuestionId,
+        );
+  
+        let currentScore = rooms[roomId].scores?.get(ws)?.score;
+  
+        if (!currentScore) {
+          rooms[roomId].scores?.set(ws, { username: username, score: 0 });
+          currentScore = 0;
+        }
+        if (question) {
+          const isCorrect = question.correct === Answer;
+          if (isCorrect) {
+            const payload = {
+              type: 'answer',
+              payload: {
+                QuestionId: QuestionId,
+                Correct: true,
+              },
+            };
+            ws.send(JSON.stringify(payload));
+  
+            console.log('Correct ans:', Answer);
+            rooms[roomId].scores?.set(ws, {
+              username: username,
+              score: currentScore + 1,
+            });
+          } else {
+            const payload = {
+              type: 'answer',
+              payload: {
+                QuestionId: QuestionId,
+                Correct: false,
+              },
+            };
+            ws.send(JSON.stringify(payload));
+            console.log('InCorrect ans:', Answer);
+          }
+  
+          let questionsAnswered = rooms[roomId].answered.get(username);
+  
+          if (!questionsAnswered) {
+            questionsAnswered = 0;
+          }
+  
+          rooms[roomId].answered.set(username, questionsAnswered + 1);
+  
+          console.log(Array.from(rooms[roomId].answered.entries()));
+          const liveScore = Array.from(rooms[roomId].answered.entries());
+          rooms[roomId].clients.forEach((socket) => {
+            socket.send(
+              JSON.stringify({
+                type: 'live-score',
+                payload: {
+                  liveScore: liveScore,
+                },
+              }),
+            );
           });
         } else {
-          const payload = {
-            type: 'answer',
-            payload: {
-              QuestionId: QuestionId,
-              Correct: false,
-            },
-          };
-          ws.send(JSON.stringify(payload));
-          console.log('InCorrect ans:', Answer);
+          console.error('Question not found.');
         }
-
-        let questionsAnswered = rooms[roomId].answered.get(username);
-
-        if (!questionsAnswered) {
-          questionsAnswered = 0;
+      } else if (rooms[roomId].type === 'Lightning'){
+        const QuestionId = msg.payload.QuestionId;
+        const Answer = msg.payload.Answer;
+        const username = msg.payload.username;
+  
+        const question = rooms[roomId].questions?.find(
+          (q) => q.id === QuestionId,
+        );
+  
+        let currentScore = rooms[roomId].scores?.get(ws)?.score;
+  
+        if (!currentScore) {
+          rooms[roomId].scores?.set(ws, { username: username, score: 0 });
+          currentScore = 0;
         }
-
-        rooms[roomId].answered.set(username, questionsAnswered + 1);
-
-        console.log(Array.from(rooms[roomId].answered.entries()));
-        const liveScore = Array.from(rooms[roomId].answered.entries());
-        rooms[roomId].clients.forEach((socket) => {
-          socket.send(
-            JSON.stringify({
-              type: 'live-score',
+        if (question) {
+          const isCorrect = question.correct === Answer;
+          if (isCorrect) {
+            const payload = {
+              type: 'answer',
               payload: {
-                liveScore: liveScore,
+                QuestionId: QuestionId,
+                Correct: true,
               },
-            }),
-          );
-        });
-      } else {
-        console.error('Question not found.');
+            };
+            ws.send(JSON.stringify(payload));
+  
+            console.log('Correct ans:', Answer);
+            rooms[roomId].scores?.set(ws, {
+              username: username,
+              score: currentScore + 1,
+            });
+
+            rooms[roomId].clients.forEach((ws)=>{
+              ws.send(JSON.stringify({
+                type:'next-question',
+                payload:{
+                  answeredCorrectlyBy:username
+                }
+              }))
+            })
+
+          } else {
+            const payload = {
+              type: 'answer',
+              payload: {
+                QuestionId: QuestionId,
+                Correct: false,
+              },
+            };
+            ws.send(JSON.stringify(payload));
+            console.log('InCorrect ans:', Answer);
+          }
+  
+          let questionsAnswered = rooms[roomId].answered.get(username);
+  
+          if (!questionsAnswered) {
+            questionsAnswered = 0;
+          }
+  
+          rooms[roomId].answered.set(username, questionsAnswered + 1);
+          
+        } else {
+          console.error('Question not found.');
+        }
       }
+      
     }
 
     if (msg.type === 'finish') {

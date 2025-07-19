@@ -12,6 +12,7 @@ export type questionsAnswered = number;
 
 export type QuizRoom = {
   clients: Set<WebSocket>;
+  type: 'Quiz'|'Lightning'|null;
   host: { Websocket: WebSocket; username: string };
   questions: Question[] | null;
   scores: Map<WebSocket, { username: string; score: number }> | null;
@@ -32,5 +33,6 @@ export type message = {
     Answer?: string;
     time?: string;
     difficulty: string | number;
+    roomType:'Quiz'|'Lightning'
   };
 };
