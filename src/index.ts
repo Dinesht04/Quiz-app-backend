@@ -208,10 +208,19 @@ app.ws('/', function(ws :WebSocket, req:any) {
                 ws.send(JSON.stringify({
                   type:'move-to-next-question',
                   payload:{
+                    moveToNextQuestion: true,
                     answeredCorrectlyBy:username
                   }
                 }))
               })
+
+              rooms[roomId].answered.forEach((questionsAnswered,username)=>{
+                rooms[roomId].answered.set(username,questionsAnswered+1);
+                console.log(username,' has answered ',questionsAnswered,' questions.')
+            })
+
+
+
             }
 
             console.log('Correct ans:', Answer);
@@ -230,16 +239,59 @@ app.ws('/', function(ws :WebSocket, req:any) {
               },
             };
             ws.send(JSON.stringify(payload));
+
+            if(rooms[roomId].type === 'Lightning'){
+
+              let everyoneAnswered = true;
+  
+              let NumberOfQuestionsThisUserHasAnswered = rooms[roomId].answered.get(username)
+
+              if (!NumberOfQuestionsThisUserHasAnswered) {
+                NumberOfQuestionsThisUserHasAnswered = 0;
+              }
+      
+              rooms[roomId].answered.set(username, NumberOfQuestionsThisUserHasAnswered + 1);
+
+              console.log('NumberOfQuestionsThisUserHasAnswered: ',username,' : ',NumberOfQuestionsThisUserHasAnswered+1)
+  
+              rooms[roomId].answered.forEach((questionsAnswered,username)=>{
+                  console.log(username,' has answered ',questionsAnswered,' questions.')
+  
+                  if(NumberOfQuestionsThisUserHasAnswered > questionsAnswered){
+                    everyoneAnswered = false;
+                    console.log(username,' is behind')
+                  }
+                
+              })
+              
+              if(everyoneAnswered === true){
+                rooms[roomId].clients.forEach((ws)=>{
+                  ws.send(JSON.stringify({
+                    type:'move-to-next-question',
+                    payload:{
+                      everyoneAnsweredCorrectly: false
+                    }
+                  }))
+                })
+              }
+              
+            }
+
             console.log('InCorrect ans:', Answer);
           }
   
-          let questionsAnswered = rooms[roomId].answered.get(username);
+          //UPDATING NUMBER OF QUESTIONS ANSWERED
+          if(rooms[roomId].type === 'Quiz'){
+            let questionsAnswered = rooms[roomId].answered.get(username);
   
-          if (!questionsAnswered) {
-            questionsAnswered = 0;
-          }
-  
-          rooms[roomId].answered.set(username, questionsAnswered + 1);
+            if (!questionsAnswered) {
+              questionsAnswered = 0;
+            }
+    
+            rooms[roomId].answered.set(username, questionsAnswered + 1);
+          } 
+
+          
 
           // if(rooms[roomId].type === 'Quiz'){
             const liveScore = Array.from(rooms[roomId].answered.entries());
@@ -254,35 +306,8 @@ app.ws('/', function(ws :WebSocket, req:any) {
               );
             });
           // }
-
-          if(rooms[roomId].type === 'Lightning'){
-
-            let everyoneAnswered = true;
-
-            const NumberOfQuestionsThisUserHasAnswered = rooms[roomId].answered.get(username)
-
-            rooms[roomId].answered.forEach((questionsAnswered,username)=>{
-              if(NumberOfQuestionsThisUserHasAnswered){
-                if(NumberOfQuestionsThisUserHasAnswered > questionsAnswered){
-                  everyoneAnswered = false;
-                  console.log(username,' is behind')
-                }
-              }
-              })
-            
-            if(everyoneAnswered){
-              rooms[roomId].clients.forEach((ws)=>{
-                ws.send(JSON.stringify({
-                  type:'move-to-next-question',
-                  payload:{
-                    answeredCorrectlyBy:false
-
-                  }
-                }))
-              })
-            }
-            
-          }
+          
+          
           
         } else {
           console.error('Question not found.');
