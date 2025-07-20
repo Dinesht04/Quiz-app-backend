@@ -216,7 +216,7 @@ app.ws('/', function(ws :WebSocket, req:any) {
 
               rooms[roomId].answered.forEach((questionsAnswered,username)=>{
                 rooms[roomId].answered.set(username,questionsAnswered+1);
-                console.log(username,' has answered ',questionsAnswered,' questions.')
+                console.log(username,' has answered ',questionsAnswered+1,' questions.')
             })
 
 
