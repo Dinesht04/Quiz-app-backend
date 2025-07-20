@@ -251,8 +251,8 @@ app.ws('/', function(ws :WebSocket, req:any) {
               }
       
               rooms[roomId].answered.set(username, NumberOfQuestionsThisUserHasAnswered + 1);
-
-              console.log('NumberOfQuestionsThisUserHasAnswered: ',username,' : ',NumberOfQuestionsThisUserHasAnswered+1)
+              NumberOfQuestionsThisUserHasAnswered++;
+              console.log('NumberOfQuestionsThisUserHasAnswered: ',username,' : ',NumberOfQuestionsThisUserHasAnswered)
   
               rooms[roomId].answered.forEach((questionsAnswered,username)=>{
                   console.log(username,' has answered ',questionsAnswered,' questions.')
