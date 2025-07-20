@@ -157,6 +157,7 @@ app.ws('/', function(ws :WebSocket, req:any) {
 
           const payload = {
             type: 'questions',
+            roomType: rooms[roomId].type,
             payload: geminiResponse,
           };
 
@@ -174,7 +175,7 @@ app.ws('/', function(ws :WebSocket, req:any) {
     //CHECKING QUIZ ANSWER
     if (msg.type === 'answer') {
 
-      if(rooms[roomId].type === 'Quiz'){
+      
         const QuestionId = msg.payload.QuestionId;
         const Answer = msg.payload.Answer;
         const username = msg.payload.username;
@@ -200,12 +201,26 @@ app.ws('/', function(ws :WebSocket, req:any) {
               },
             };
             ws.send(JSON.stringify(payload));
-  
+
+            if(rooms[roomId].type === 'Lightning'){
+
+              rooms[roomId].clients.forEach((ws)=>{
+                ws.send(JSON.stringify({
+                  type:'move-to-next-question',
+                  payload:{
+                    answeredCorrectlyBy:username
+                  }
+                }))
+              })
+            }
+
             console.log('Correct ans:', Answer);
+
             rooms[roomId].scores?.set(ws, {
               username: username,
               score: currentScore + 1,
             });
+
           } else {
             const payload = {
               type: 'answer',
@@ -225,127 +240,95 @@ app.ws('/', function(ws :WebSocket, req:any) {
           }
   
           rooms[roomId].answered.set(username, questionsAnswered + 1);
-  
-          console.log(Array.from(rooms[roomId].answered.entries()));
-          const liveScore = Array.from(rooms[roomId].answered.entries());
-          rooms[roomId].clients.forEach((socket) => {
-            socket.send(
-              JSON.stringify({
-                type: 'live-score',
-                payload: {
-                  liveScore: liveScore,
-                },
-              }),
-            );
-          });
-        } else {
-          console.error('Question not found.');
-        }
-      } else if (rooms[roomId].type === 'Lightning'){
-        const QuestionId = msg.payload.QuestionId;
-        const Answer = msg.payload.Answer;
-        const username = msg.payload.username;
-  
-        const question = rooms[roomId].questions?.find(
-          (q) => q.id === QuestionId,
-        );
-  
-        let currentScore = rooms[roomId].scores?.get(ws)?.score;
-  
-        if (!currentScore) {
-          rooms[roomId].scores?.set(ws, { username: username, score: 0 });
-          currentScore = 0;
-        }
-        if (question) {
-          const isCorrect = question.correct === Answer;
-          if (isCorrect) {
-            const payload = {
-              type: 'answer',
-              payload: {
-                QuestionId: QuestionId,
-                Correct: true,
-              },
-            };
-            ws.send(JSON.stringify(payload));
-  
-            console.log('Correct ans:', Answer);
-            rooms[roomId].scores?.set(ws, {
-              username: username,
-              score: currentScore + 1,
-            });
 
-            rooms[roomId].clients.forEach((ws)=>{
-              ws.send(JSON.stringify({
-                type:'next-question',
-                payload:{
-                  answeredCorrectlyBy:username
+          // if(rooms[roomId].type === 'Quiz'){
+            const liveScore = Array.from(rooms[roomId].answered.entries());
+            rooms[roomId].clients.forEach((socket) => {
+              socket.send(
+                JSON.stringify({
+                  type: 'live-score',
+                  payload: {
+                    liveScore: liveScore,
+                  },
+                }),
+              );
+            });
+          // }
+
+          if(rooms[roomId].type === 'Lightning'){
+
+            let everyoneAnswered = true;
+
+            const NumberOfQuestionsThisUserHasAnswered = rooms[roomId].answered.get(username)
+
+            rooms[roomId].answered.forEach((questionsAnswered,username)=>{
+              if(NumberOfQuestionsThisUserHasAnswered){
+                if(NumberOfQuestionsThisUserHasAnswered > questionsAnswered){
+                  everyoneAnswered = false;
+                  console.log(username,' is behind')
                 }
-              }))
-            })
+              }
+              })
+            
+            if(everyoneAnswered){
+              rooms[roomId].clients.forEach((ws)=>{
+                ws.send(JSON.stringify({
+                  type:'move-to-next-question',
+                  payload:{
+                    answeredCorrectlyBy:false
 
-          } else {
-            const payload = {
-              type: 'answer',
-              payload: {
-                QuestionId: QuestionId,
-                Correct: false,
-              },
-            };
-            ws.send(JSON.stringify(payload));
-            console.log('InCorrect ans:', Answer);
+                  }
+                }))
+              })
+            }
+            
           }
-  
-          let questionsAnswered = rooms[roomId].answered.get(username);
-  
-          if (!questionsAnswered) {
-            questionsAnswered = 0;
-          }
-  
-          rooms[roomId].answered.set(username, questionsAnswered + 1);
           
         } else {
           console.error('Question not found.');
         }
-      }
-      
+     
     }
 
     if (msg.type === 'finish') {
       console.log('qUIZ FINISHED for user');
 
       if (rooms[roomId].scores) {
-        let over = true;
 
-        for (const score of rooms[roomId].answered) {
-          if (score[1] < 5) {
-            over = false;
-            break;
+          let over = true;
+
+          for (const score of rooms[roomId].answered) {
+            if (score[1] < 5) {
+              over = false;
+              break;
+            }
           }
-        }
 
-        if (over) {
-          const finalScoreList: { username: string; score: number }[] = [];
+          if (over) {
+            const finalScoreList: { username: string; score: number }[] = [];
 
-          rooms[roomId].scores?.forEach((score) => {
-            finalScoreList.push({
-              username: score.username,
-              score: score.score,
+            rooms[roomId].scores?.forEach((score) => {
+              finalScoreList.push({
+                username: score.username,
+                score: score.score,
+              });
             });
-          });
 
-          rooms[roomId].clients.forEach((socket) => {
-            socket.send(
-              JSON.stringify({
-                type: 'final-score',
-                payload: {
-                  finalScores: finalScoreList,
-                },
-              }),
-            );
-          });
+            rooms[roomId].clients.forEach((socket) => {
+              socket.send(
+                JSON.stringify({
+                  type: 'final-score',
+                  payload: {
+                    finalScores: finalScoreList,
+                  },
+                }),
+              );
+            });
 
-          rooms[roomId].state = 'ended';
-        }
+            rooms[roomId].state = 'ended';
+          }
+        
+
       } else {
         ws.send(
           JSON.stringify({
