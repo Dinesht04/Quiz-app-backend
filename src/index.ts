@@ -2,7 +2,7 @@ import WebSocket from 'ws';
 import dotenv from 'dotenv';
 import { message, Question, QuizRoom } from './types';
 import { CallGemini } from './gemini';
-import { removeClientFromRooms } from './RemoveClientFromRoom';
+import { removeClientFromRooms, resetRoom } from './RemoveClientFromRoom';
 
 dotenv.config();
 
@@ -53,7 +53,7 @@ app.ws('/', function(ws :WebSocket, req:any) {
     if (msg.type === 'join') {
       const username = msg.payload.username;
 
-      if (!rooms[roomId]) {
+      if (!rooms[roomId] || rooms[roomId].clients.size === 0) {
         rooms[roomId] = {
           clients: new Set<WebSocket>([ws]),
           host: { username: username, Websocket: ws },
@@ -134,7 +134,7 @@ app.ws('/', function(ws :WebSocket, req:any) {
     //ROOM STARTING
     if (msg.type === 'start') {
       try {
-        if (rooms[roomId].host.Websocket !== ws) {
+        if ( rooms[roomId].host && rooms[roomId].host.Websocket !== ws) {
           const message = {
             type: 'unauthorised',
             payload: {
@@ -351,6 +351,9 @@ app.ws('/', function(ws :WebSocket, req:any) {
             });
 
             rooms[roomId].state = 'ended';
+
+            //resetting room upn end
+            resetRoom(roomId);
           }
         
 
