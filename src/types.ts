@@ -13,7 +13,7 @@ export type questionsAnswered = number;
 export type QuizRoom = {
   clients: Set<WebSocket>;
   type: 'Quiz'|'Lightning'|null;
-  host: { Websocket: WebSocket; username: string };
+  host: { Websocket: WebSocket; username: string } | null;
   questions: Question[] | null;
   scores: Map<WebSocket, { username: string; score: number }> | null;
   answered: Map<username, questionsAnswered>; // tracks which question IDs user has answered
@@ -25,7 +25,7 @@ export type message = {
   type: string;
   payload: {
     message?: string;
-    roomId: string | number;
+    roomId: string;
     username: string;
     expires: Date;
     topic: string;
