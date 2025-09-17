@@ -105,6 +105,16 @@ Follow these steps to get your development environment running:
 
 ---
 
+
+ **For Docker**
+    Run the following command
+
+    ```bash
+    docker build -t quiz-app-ws-server:1.0 .
+    docker run -p 8080:8080 quiz-app-ws-server:1.0
+    ```
+
+
 ## Usage
 
 The Quiz-Verse backend acts as a WebSocket server, handling real-time interactions between quiz players and managing the quiz state.
