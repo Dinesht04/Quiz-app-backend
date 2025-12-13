@@ -39,7 +39,7 @@ IMPORTANT: Respond with ONLY the JSON array. Do NOT wrap it in markdown code blo
 
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-1.5-flash',
     contents: newPrompt,
   });
 
