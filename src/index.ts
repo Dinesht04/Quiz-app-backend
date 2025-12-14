@@ -1,7 +1,7 @@
 import WebSocket from 'ws';
 import dotenv from 'dotenv';
 import { message, Question, QuizRoom } from './types';
-import { CallGemini } from './gemini';
+import { CallGemini, CallGroq } from './gemini';
 import { removeClientFromRooms, resetRoom } from './RemoveClientFromRoom';
 
 dotenv.config();
@@ -19,8 +19,10 @@ let userCount = 0;
 // @ts
 const PORT: number = parseInt(<string>process.env.PORT, 10) || 3000
 
-app.get('/', function(req: any, res: Response) {
+app.get('/', async function (req: any, res: any) {
   console.log('Get Req')
+  // const bruh = await CallGroq("F1",2)
+  // res.send(bruh)
 });
 
 
@@ -145,7 +147,7 @@ app.ws('/', function(ws :WebSocket, req:any) {
           ws.send(JSON.stringify(message));
         } else {
           const difficulty = msg.payload.difficulty;
-          const geminiResponse: Question[] = await CallGemini(
+          const geminiResponse: Question[] = await CallGroq(
             msg.payload.topic,
             difficulty,
           );
