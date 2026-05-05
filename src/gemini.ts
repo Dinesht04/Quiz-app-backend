@@ -92,6 +92,7 @@ IMPORTANT: Respond with ONLY the JSON array. Do NOT wrap it in markdown code blo
   const completion = await getGroqChatCompletion(newPrompt);
 
   if (!completion.choices[0]?.message?.content) {
+    console.log(completion)
     throw new Error('Gemini API error: No text content in response.');
   }
 
